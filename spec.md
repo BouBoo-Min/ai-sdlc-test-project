@@ -2,7 +2,7 @@
 
 - Derived from: intent/intent.md（iteration 002，commit ba79af5；intent 门批准 product_owner_accept-001，commit def0781）
 - Author: product engineering agent（draft）; Bouboo（reviewer）
-- Status: Draft
+- Status: Approved
 - Date: 2026-09-18
 - 前序: [spec-001.md](spec-001.md)（一期登记/列表/详情/删除，已上线）
 

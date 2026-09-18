@@ -20,7 +20,7 @@ nodes:
     stage: design
     artifact: spec.md
     gate: product_owner_approve
-    status: not_started
+    status: approved
     done_status: approved
   plan:
     stage: build
