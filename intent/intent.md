@@ -2,7 +2,7 @@
 
 - Author: Bouboo
 - Source: 用户直接提出（"新增一个编辑功能"）
-- Status: Draft
+- Status: Accepted
 - Date: 2026-09-18
 - 前序迭代: [001-suishiji.md](001-suishiji.md)
 

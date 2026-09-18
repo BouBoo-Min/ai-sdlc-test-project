@@ -14,7 +14,7 @@ nodes:
     stage: plan
     artifact: intent/intent.md
     gate: product_owner_accept
-    status: not_started
+    status: accepted
     done_status: accepted
   spec:
     stage: design
