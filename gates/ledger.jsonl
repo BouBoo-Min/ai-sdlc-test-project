@@ -1,0 +1,1 @@
+{"approver": "product-manager", "artifact": "intent/intent.md", "commit": null, "decided_at": "2026-09-18T07:35:07Z", "decision": "approved", "evidence": "org/reviews/intent-001.md; commit 451330d", "expires_at": null, "gate": "intent", "hash": "5de1c50bf8a9466f26060fb901defee4551f370e45175edf66b4470b61adaa0f", "id": "intent-001", "prev_hash": null}
