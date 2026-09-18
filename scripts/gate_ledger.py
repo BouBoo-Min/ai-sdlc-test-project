@@ -198,8 +198,40 @@ def next_id(records: list[dict], gate: str) -> str:
     return f"{gate}-{n:03d}"
 
 
+def _graph_gates(path: Path) -> set[str]:
+    """Gate names declared in a workflow-graph.yaml (for --graph validation)."""
+    graph = load_yaml(path)
+    nodes = graph.get("nodes", {})
+    gates = {
+        node["gate"]
+        for node in nodes.values()
+        if isinstance(node, dict) and isinstance(node.get("gate"), str)
+    }
+    if not gates:
+        raise ValueError(f"no gates found in {path}")
+    return gates
+
+
 def cmd_record(args: argparse.Namespace) -> int:
     path = Path(args.ledger)
+    graph_ref = getattr(args, "graph", None)
+    if graph_ref:
+        try:
+            gates = _graph_gates(Path(graph_ref))
+        except Exception as exc:
+            print(
+                f"error: cannot validate gate against {graph_ref}: {exc}",
+                file=sys.stderr,
+            )
+            return 1
+        if args.gate not in gates:
+            print(
+                f"error: gate {args.gate!r} is not a gate of {graph_ref} "
+                f"({sorted(gates)}). Use the node's canonical gate name, or "
+                f"workflow_state.py close, which derives it from the node.",
+                file=sys.stderr,
+            )
+            return 1
     records = read_ledger(path)
     if any(r.get("id") == args.id for r in records):
         print(f"error: record id {args.id!r} already exists (ledger is append-only)", file=sys.stderr)
@@ -326,6 +358,8 @@ def main(argv: list[str] | None = None) -> int:
     p_record.add_argument("--commit", default=None, help="commit SHA, PR number, or release tag")
     p_record.add_argument("--approver", required=True, help="who approved (human identity or review bot)")
     p_record.add_argument("--evidence", required=True, help="ticket, CI run, or link backing the decision")
+    p_record.add_argument("--graph", default=None,
+                          help="workflow-graph.yaml; fail if the gate name is not a graph gate")
     p_record.add_argument("--decision", choices=["approved", "rejected"], default="approved")
     p_record.add_argument("--expires-at", default=None, help="ISO-8601 or epoch; absent = never expires")
     p_record.add_argument("--id", default=None, help="explicit record id (default <gate>-<n>)")

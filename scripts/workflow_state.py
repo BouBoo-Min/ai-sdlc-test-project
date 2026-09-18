@@ -15,10 +15,19 @@ Usage:
                               [--graph workflow-graph.yaml]
                               [--ledger gates/ledger.jsonl]
                               [--require-committed]
+    workflow_state.py close --node <name> --approver <who> --evidence <ref>
+                            [--decision approved|rejected] [--artifact <what>]
+                            [--commit <ref>]
+                            [--graph workflow-graph.yaml]
+                            [--ledger gates/ledger.jsonl]
     workflow_state.py check [--graph workflow-graph.yaml]
                             [--ledger gates/ledger.jsonl] [--strict]
     workflow_state.py preflight [--graph workflow-graph.yaml]
                                 [--ledger gates/ledger.jsonl]   (hook, stdin JSON)
+
+close is the normal way to pass a gate: it records the decision in the
+ledger and advances the graph node in one step, so the state view cannot
+silently drift behind the ledger.
 
 Exit codes: 0 = ok, 1 = validation/failure, 2 = usage error. Ledger chain
 verification is delegated to gate_ledger.py; this script never re-implements
@@ -201,6 +210,7 @@ def cmd_status(args: argparse.Namespace) -> int:
     try:
         graph = _read_graph(Path(args.graph))
         rows, warnings = _status_view(graph, Path(args.ledger))
+        warnings = warnings + _stale_gate_warnings(graph, _read_ledger(Path(args.ledger)))
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -315,10 +325,10 @@ def cmd_advance(args: argparse.Namespace) -> int:
         return 1
 
     status = node.get("status", "not_started")
-    if status not in ("in_review", "pending"):
+    if status not in ("not_started", "in_review", "pending"):
         print(
             f"error: node {args.node} status is {status!r}; advance requires "
-            "in_review or pending",
+            "not_started, in_review, or pending",
             file=sys.stderr,
         )
         return 1
@@ -528,7 +538,11 @@ def cmd_check(args: argparse.Namespace) -> int:
     if violations:
         for violation in violations:
             print(f"violation: {violation}")
+        for warning in _stale_gate_warnings(graph, records):
+            print(f"warning: {warning}")
         return 1
+    for warning in _stale_gate_warnings(graph, records):
+        print(f"warning: {warning}")
     print(f"check: consistent ({len(nodes)} nodes, {len(records)} ledger record(s))")
     return 0
 
@@ -592,6 +606,154 @@ def cmd_preflight(args: argparse.Namespace) -> int:
     return 0
 
 
+def _stale_gate_warnings(graph: dict, records: list[dict]) -> list[str]:
+    """Approved records whose node never advanced: the graph silently stale.
+
+    This is the record-without-advance drift — a warning, not a violation,
+    because a node legitimately sits below done_status while the next
+    iteration is being drafted under an older approval.
+    """
+    warnings: list[str] = []
+    nodes = graph.get("nodes", {})
+    if not isinstance(nodes, dict):
+        return warnings
+    for name, node in nodes.items():
+        if not isinstance(node, dict):
+            continue
+        gate = node.get("gate")
+        done_status = node.get("done_status")
+        if not isinstance(gate, str) or not done_status:
+            continue
+        status = node.get("status", "not_started")
+        if status == done_status:
+            continue
+        approved = [
+            r["id"]
+            for r in records
+            if r.get("gate") == gate and r.get("decision") == "approved" and r.get("id")
+        ]
+        if approved:
+            warnings.append(
+                f"gate {gate!r} has approved record {approved[-1]} but node "
+                f"{name!r} status is {status!r}, not {done_status!r} — sync it "
+                f"with: workflow_state.py advance --node {name} --record {approved[-1]}"
+            )
+    return warnings
+
+
+def _flip_artifact_status(path: Path, status: str) -> bool:
+    """Update the artifact's `- Status:` field; True when changed.
+
+    The document's own status (Draft | Accepted | Approved | Rejected) is a
+    third copy of the gate state next to the ledger and the graph; close
+    keeps it from going stale by flipping it in the same step.
+    """
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    updated, count = re.subn(r"(?m)^(- Status:).*$", rf"\1 {status}", text, count=1)
+    if count == 0 or updated == text:
+        return False
+    try:
+        _atomic_write(path, updated)
+    except (OSError, ValueError):
+        return False
+    return True
+
+
+def cmd_close(args: argparse.Namespace) -> int:
+    """One-step gate closure: append the ledger record, then advance the graph.
+
+    record and advance as two separate commands is how the second half gets
+    skipped (the graph silently goes stale); close makes a single command the
+    whole ritual, so the decision record and the state view cannot drift.
+    """
+    graph_path = Path(args.graph)
+    ledger_path = Path(args.ledger)
+    try:
+        graph = _read_graph(graph_path)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    nodes = graph.get("nodes", {})
+    node = nodes.get(args.node) if isinstance(nodes, dict) else None
+    if not isinstance(node, dict):
+        print(f"error: no node named {args.node!r} in {graph_path}", file=sys.stderr)
+        return 1
+    gate = node.get("gate")
+    if not isinstance(gate, str):
+        print(f"error: node {args.node!r} has no gate", file=sys.stderr)
+        return 1
+    artifact = args.artifact or node.get("artifact") or args.node
+
+    rec_args = argparse.Namespace(
+        ledger=str(ledger_path),
+        gate=gate,
+        artifact=str(artifact),
+        commit=args.commit,
+        approver=args.approver,
+        evidence=args.evidence,
+        decision=args.decision,
+        expires_at=None,
+        id=None,
+    )
+    with contextlib.redirect_stdout(io.StringIO()):
+        if gl.cmd_record(rec_args) != 0:
+            return 1  # gate_ledger already printed the reason
+    try:
+        record_id = _read_ledger(ledger_path)[-1]["id"]
+    except (ValueError, IndexError, KeyError) as exc:
+        print(f"error: cannot read back the new record: {exc}", file=sys.stderr)
+        return 1
+
+    if args.decision == "rejected":
+        if _pathlike_artifact(artifact):
+            _flip_artifact_status(Path(artifact), "Rejected")
+        print(
+            f"closed: {record_id} records rejection for gate {gate!r}; node "
+            f"{args.node} stays open — revise the artifact and re-ask the gate."
+        )
+        return 0
+
+    done_status = node.get("done_status")
+    if not done_status:
+        print(
+            f"error: recorded {record_id}, but node {args.node!r} has no "
+            f"done_status to advance to",
+            file=sys.stderr,
+        )
+        return 1
+    if not _verified_record_id(ledger_path, record_id, False):
+        print(
+            f"error: freshly recorded {record_id} failed chain verification",
+            file=sys.stderr,
+        )
+        return 1
+    try:
+        text = graph_path.read_text(encoding="utf-8")
+        updated = _replace_status_line(text, args.node, done_status)
+        _atomic_write(graph_path, updated)
+    except (OSError, ValueError) as exc:
+        print(
+            f"error: recorded {record_id} but could not update the graph: {exc}; "
+            f"finish with: workflow_state.py advance --node {args.node} "
+            f"--record {record_id}",
+            file=sys.stderr,
+        )
+        return 1
+
+    print(f"closed: {record_id} approved → node {args.node} is now {done_status!r}")
+    flipped = bool(_pathlike_artifact(artifact)) and _flip_artifact_status(
+        Path(artifact), str(done_status).capitalize()
+    )
+    if flipped:
+        print(f"artifact status flipped: {artifact} → {str(done_status).capitalize()}")
+    files = f"{graph_path} {ledger_path}" + (f" {artifact}" if flipped else "")
+    print(f"next: git add {files} && git commit -m 'gate: {record_id} approved'")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -621,6 +783,20 @@ def main(argv: list[str] | None = None) -> int:
     preflight.add_argument("--graph", default=DEFAULT_GRAPH)
     preflight.add_argument("--ledger", default=DEFAULT_LEDGER)
     preflight.set_defaults(fn=cmd_preflight)
+
+    close = sub.add_parser(
+        "close",
+        help="one-step gate closure: record the decision, then advance the graph",
+    )
+    close.add_argument("--node", required=True, help="graph node whose gate is closing")
+    close.add_argument("--approver", required=True, help="who approved (human identity or role)")
+    close.add_argument("--evidence", required=True, help="what backs the decision (chat, link, ticket)")
+    close.add_argument("--artifact", default=None, help="defaults to the node's artifact")
+    close.add_argument("--commit", default=None, help="commit SHA or reference at decision time")
+    close.add_argument("--decision", choices=["approved", "rejected"], default="approved")
+    close.add_argument("--graph", default=DEFAULT_GRAPH)
+    close.add_argument("--ledger", default=DEFAULT_LEDGER)
+    close.set_defaults(fn=cmd_close)
 
     check = sub.add_parser("check", help="validate graph/ledger consistency")
     check.add_argument("--graph", default=DEFAULT_GRAPH)
