@@ -26,7 +26,7 @@ nodes:
     stage: build
     artifact: plan.md
     gate: engineer_approve
-    status: not_started
+    status: approved
     done_status: approved
   implementation:
     stage: build

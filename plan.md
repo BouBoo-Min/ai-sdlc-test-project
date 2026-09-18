@@ -1,7 +1,7 @@
 # 随时记 · 编辑功能（二期） — Build Plan
 
 - Derived from: spec.md（iteration 002，commit 14b53a2；spec 门批准 product_owner_approve-001，commit affa78c）
-- Status: Draft
+- Status: Approved
 - Date: 2026-09-18
 - 前序: [plan-001.md](plan-001.md)
 
