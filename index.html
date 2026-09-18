@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>随时记</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <!-- 全局消息提示容器：与三个视图 section 平级（spec-001 Nit 4） -->
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <main id="app">
+    <!-- 登记视图 -->
+    <section id="view-new" hidden>
+      <h1>记一笔</h1>
+      <form id="new-form" novalidate>
+        <div class="form-field">
+          <label for="f-title">标题</label>
+          <input type="text" id="f-title" name="title" placeholder="给这条记录起个标题">
+        </div>
+        <div class="form-field">
+          <label for="f-content">内容</label>
+          <textarea id="f-content" name="content" rows="6" placeholder="想记点什么…"></textarea>
+        </div>
+        <div class="form-field">
+          <label for="f-time">创建时间</label>
+          <!-- 已知限制（spec-001 Nit 1）：旧版 Safari 对 datetime-local 支持不一致，
+               一期不实现类型检测降级，评审已同意不阻塞。 -->
+          <input type="datetime-local" id="f-time" name="time">
+        </div>
+        <p id="form-error" class="form-error" hidden></p>
+        <button type="submit" id="f-submit" class="btn btn-primary">保存</button>
+      </form>
+    </section>
+
+    <!-- 列表视图 -->
+    <section id="view-list" hidden>
+      <h1>我的记录</h1>
+      <div class="form-field">
+        <label for="search-input">搜索</label>
+        <input type="search" id="search-input" placeholder="搜索标题或内容">
+      </div>
+      <ul id="record-list"></ul>
+      <a href="#/new" id="go-new" class="btn btn-primary">去记一条</a>
+    </section>
+
+    <!-- 详情视图 -->
+    <section id="view-detail" hidden>
+      <h1 id="d-title"></h1>
+      <p id="d-time" class="detail-time"></p>
+      <div id="d-content" class="detail-content"></div>
+      <button id="d-delete" class="btn btn-danger">删除</button>
+      <a href="#/list" class="btn">返回列表</a>
+    </section>
+  </main>
+</body>
+</html>
