@@ -161,8 +161,14 @@
   }
 
   function initNewForm() {
+    var titleEl = document.getElementById('f-title');
+    var contentEl = document.getElementById('f-content');
     var timeEl = document.getElementById('f-time');
     var errEl = document.getElementById('form-error');
+    // 防御：进入 #/new 时若表单仍残留 title/content（如 bfcache/后退），重置为空，
+    // 保证「进入登记页 = 全新一笔」的语义
+    titleEl.value = '';
+    contentEl.value = '';
     if (!timeEl.value) timeEl.value = toLocalInputValue(Date.now());
     if (errEl) {
       errEl.hidden = true;
@@ -199,6 +205,11 @@
 
     if (saveRecords(records)) {
       showToast('保存成功', 'info');
+      // 保存成功后清空表单（时间一并清空，下次进入 #/new 由 initNewForm 重新初始化），
+      // 防止再次进入登记页时残留旧值导致重复入库
+      titleEl.value = '';
+      contentEl.value = '';
+      timeEl.value = '';
       window.location.hash = '#/list';
     } else {
       // 保存失败：停留表单，字段原样保留供重试
