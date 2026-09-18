@@ -103,7 +103,7 @@
   var currentDetailId = null;
 
   function showSection(id) {
-    ['view-new', 'view-list', 'view-detail'].forEach(function (sid) {
+    ['view-new', 'view-list', 'view-detail', 'view-edit'].forEach(function (sid) {
       document.getElementById(sid).hidden = (sid !== id);
     });
   }
@@ -133,6 +133,23 @@
       currentDetailId = id;
       renderDetail(rec);
       showSection('view-detail');
+      return;
+    }
+
+    // #/edit/<id>：与 #/detail/ 同构（spec-002）；每次进入都重新预填，bfcache/后退所见即所存
+    if (hash === '#/edit/' || hash.indexOf('#/edit/') === 0) {
+      var editId = hash.slice('#/edit/'.length);
+      records = loadRecords();
+      var editRec = null;
+      for (var j = 0; j < records.length; j++) {
+        if (records[j].id === editId) { editRec = records[j]; break; }
+      }
+      if (!editRec) {
+        window.location.hash = '#/list';
+        return;
+      }
+      initEditForm(editRec);
+      showSection('view-edit');
       return;
     }
 
@@ -176,6 +193,27 @@
     }
   }
 
+  // 登记与编辑共用的必填校验（spec-002）：trim 后任一为空 → 表单内红字提示，返回 false
+  function validateRequired(title, content, errEl) {
+    if (!title || !content) {
+      errEl.textContent = '标题和内容不能为空';
+      errEl.hidden = false;
+      return false;
+    }
+    errEl.hidden = true;
+    return true;
+  }
+
+  // datetime-local 被清空/非法：静默回退为提交时刻，并回显，所见即所存
+  function resolveTimeInput(timeEl) {
+    var ts = parseTimeInput(timeEl.value);
+    if (ts === null) {
+      ts = Date.now();
+      timeEl.value = toLocalInputValue(ts);
+    }
+    return ts;
+  }
+
   function onFormSubmit(e) {
     e.preventDefault();
     var titleEl = document.getElementById('f-title');
@@ -185,19 +223,9 @@
 
     var title = titleEl.value.trim();
     var content = contentEl.value.trim();
-    if (!title || !content) {
-      errEl.textContent = '标题和内容不能为空';
-      errEl.hidden = false;
-      return;
-    }
-    errEl.hidden = true;
+    if (!validateRequired(title, content, errEl)) return;
 
-    // datetime-local 被清空/非法：静默回退为提交时刻，并回显，所见即所存
-    var createdAt = parseTimeInput(timeEl.value);
-    if (createdAt === null) {
-      createdAt = Date.now();
-      timeEl.value = toLocalInputValue(createdAt);
-    }
+    var createdAt = resolveTimeInput(timeEl);
 
     var record = { id: genId(), title: title, content: content, createdAt: createdAt };
     var records = loadRecords();
@@ -215,6 +243,60 @@
       // 保存失败：停留表单，字段原样保留供重试
       showToast('保存失败：存储空间已满', 'error');
     }
+  }
+
+  // ---------- 编辑视图（二期 F2/F3/F4，spec-002） ----------
+
+  function initEditForm(rec) {
+    // 每次进入都重新预填（覆盖残留），与 initNewForm 的「仅清理」语义不同
+    document.getElementById('e-id').value = rec.id;
+    document.getElementById('e-title').value = rec.title;
+    document.getElementById('e-content').value = rec.content;
+    document.getElementById('e-time').value = toLocalInputValue(rec.createdAt);
+    var errEl = document.getElementById('e-error');
+    errEl.hidden = true;
+    errEl.textContent = '';
+  }
+
+  function onEditSubmit(e) {
+    e.preventDefault();
+    var id = document.getElementById('e-id').value;
+    var titleEl = document.getElementById('e-title');
+    var contentEl = document.getElementById('e-content');
+    var timeEl = document.getElementById('e-time');
+    var errEl = document.getElementById('e-error');
+
+    var title = titleEl.value.trim();
+    var content = contentEl.value.trim();
+    if (!validateRequired(title, content, errEl)) return;
+
+    var createdAt = resolveTimeInput(timeEl);
+
+    var records = loadRecords();
+    for (var i = 0; i < records.length; i++) {
+      if (records[i].id === id) {
+        // 原地整条覆盖（spec-002 Gotchas：无跨标签同步，接受此限制）；id 不变，updatedAt 只在此处写
+        records[i].title = title;
+        records[i].content = content;
+        records[i].createdAt = createdAt;
+        records[i].updatedAt = Date.now();
+        break;
+      }
+    }
+
+    if (saveRecords(records)) {
+      showToast('已保存', 'info');
+      window.location.hash = '#/detail/' + id;
+    } else {
+      // 保存失败：停留编辑表单，字段原样保留供重试
+      showToast('保存失败：存储空间已满', 'error');
+    }
+  }
+
+  function onEditCancel() {
+    var id = document.getElementById('e-id').value;
+    // 不写任何数据，直接回详情
+    window.location.hash = '#/detail/' + id;
   }
 
   // ---------- 列表视图（F2） ----------
@@ -269,7 +351,8 @@
       li.innerHTML =
         '<div class="record-title">' + escapeHtml(r.title) + '</div>' +
         '<div class="record-summary">' + escapeHtml(summary) + '</div>' +
-        '<div class="record-time">' + escapeHtml(formatTime(r.createdAt)) + '</div>';
+        '<div class="record-time">' + escapeHtml(formatTime(r.createdAt)) +
+        (r.updatedAt ? '（已编辑）' : '') + '</div>';
       ul.appendChild(li);
     });
   }
@@ -278,9 +361,12 @@
 
   function renderDetail(rec) {
     document.getElementById('d-title').textContent = rec.title;
-    document.getElementById('d-time').textContent = '创建于 ' + formatTime(rec.createdAt);
+    // 旧数据无 updatedAt：与一期展示一致（spec-002 F6）
+    document.getElementById('d-time').textContent = '创建于 ' + formatTime(rec.createdAt) +
+      (rec.updatedAt ? ' · 最后修改于 ' + formatTime(rec.updatedAt) : '');
     // textContent + pre-wrap 保留换行，天然免疫 XSS
     document.getElementById('d-content').textContent = rec.content;
+    document.getElementById('d-edit').setAttribute('href', '#/edit/' + rec.id);
   }
 
   function onDeleteClick() {
@@ -300,6 +386,8 @@
 
   function init() {
     document.getElementById('new-form').addEventListener('submit', onFormSubmit);
+    document.getElementById('edit-form').addEventListener('submit', onEditSubmit);
+    document.getElementById('e-cancel').addEventListener('click', onEditCancel);
     document.getElementById('search-input').addEventListener('input', function (e) {
       renderList(e.target.value);
     });

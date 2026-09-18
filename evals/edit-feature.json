@@ -1,0 +1,14 @@
+{
+  "name": "edit-feature (iteration 002)",
+  "prompt": "为「随时记」应用实现编辑功能：详情页编辑入口、#/edit/<id> 路由与独立编辑表单（预填原值）、保存原地更新并写 updatedAt、取消不落库、详情/列表展示最后修改信息。",
+  "checks": [
+    "node --check app.js",
+    "grep -q \"#/edit/\" app.js",
+    "grep -q \"updatedAt = Date.now()\" app.js",
+    "grep -q \"最后修改于\" app.js",
+    "grep -q \"（已编辑）\" app.js",
+    "grep -q \"id=\\\"view-edit\\\"\" index.html",
+    "grep -q \"id=\\\"d-edit\\\"\" index.html",
+    "grep -q \"id=\\\"edit-form\\\"\" index.html"
+  ]
+}

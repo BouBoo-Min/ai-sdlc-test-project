@@ -35,6 +35,30 @@
       </form>
     </section>
 
+    <!-- 编辑视图：独立 form（spec-002），不复用 #new-form，避免残留清理与编辑预填互相干扰；
+         编辑目标 id 存 hidden input #e-id，从表单自身读取，不引入全局编辑态 -->
+    <section id="view-edit" hidden>
+      <h1>编辑记录</h1>
+      <form id="edit-form" novalidate>
+        <input type="hidden" id="e-id">
+        <div class="form-field">
+          <label for="e-title">标题</label>
+          <input type="text" id="e-title" name="title" placeholder="给这条记录起个标题">
+        </div>
+        <div class="form-field">
+          <label for="e-content">内容</label>
+          <textarea id="e-content" name="content" rows="6" placeholder="想记点什么…"></textarea>
+        </div>
+        <div class="form-field">
+          <label for="e-time">创建时间</label>
+          <input type="datetime-local" id="e-time" name="time">
+        </div>
+        <p id="e-error" class="form-error" hidden></p>
+        <button type="submit" id="e-submit" class="btn btn-primary">保存</button>
+        <button type="button" id="e-cancel" class="btn">取消</button>
+      </form>
+    </section>
+
     <!-- 列表视图 -->
     <section id="view-list" hidden>
       <h1>我的记录</h1>
@@ -51,6 +75,8 @@
       <h1 id="d-title"></h1>
       <p id="d-time" class="detail-time"></p>
       <div id="d-content" class="detail-content"></div>
+      <!-- href 的 id 部分由 renderDetail 按当前记录填全 -->
+      <a href="#/edit/" id="d-edit" class="btn btn-primary">编辑</a>
       <button id="d-delete" class="btn btn-danger">删除</button>
       <a href="#/list" class="btn">返回列表</a>
     </section>
