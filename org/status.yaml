@@ -8,5 +8,5 @@ agents:
   product-manager: { status: idle, assignment: null, last_report: "intent-001: approved" }
   product-engineer: { status: idle, assignment: null, last_report: plan.md drafted }
   engineer-1: { status: idle, assignment: null, last_report: null }
-  reviewer-1: { status: idle, assignment: null, last_report: "spec-001: approved" }
+  reviewer-1: { status: idle, assignment: null, last_report: "plan-001: approved" }
 review_queue: []
