@@ -1,36 +1,46 @@
 # 随时记
 
-- Author: <name>
-- Source: <team or channel>
-- Status: Draft | Accepted | Rejected
-- Date: <YYYY-MM-DD>
+- Author: Bouboo
+- Source: 用户直接提出（会话访谈）
+- Status: Draft
+- Date: 2026-09-18
 
 ## Problem
 
-<In your own words: what cannot be done today, and why it matters.>
+目前没有一个随时记录想法、备忘的地方：想到什么需要立刻记下来，之后能方便地翻看每一条的内容。本项目从零开始，仓库当前为空（只有 README），没有任何可用的记录工具。
 
 ## Proposed outcome
 
-<What should be true when this is done? Make it observable and measurable where possible.>
+一个纯前端网页应用「随时记」，打开即可使用，包含三个核心功能：
+
+1. **登记**：填写标题、内容，时间自动记录（可修改），保存后进入记录库。
+2. **列表**：按时间倒序展示全部记录，支持关键词搜索（匹配标题和内容）。
+3. **详情**：点击列表中的任一记录，查看该条记录的完整信息（标题、内容、创建时间）。
+
+可观察的完成标准：
+
+- 打开页面能完成「登记 → 列表中看到 → 点开看详情」的完整闭环。
+- 刷新页面后数据不丢失（浏览器 localStorage 持久化）。
+- 在列表搜索框输入关键词，列表实时过滤出匹配的记录。
 
 ## Affected users and systems
 
-<Who is affected, which systems are touched, who owns the decision.>
+- 用户：单一使用者，本地浏览器使用，无需登录。
+- 系统：全新的纯前端静态页面，数据存储于浏览器 localStorage，不涉及后端和数据库。
 
 ## Constraints
 
-<Time, budget, compliance, brand, security, compatibility, non-negotiables.>
+- 技术形态：纯前端（HTML/CSS/JavaScript），数据存浏览器 localStorage，零后端依赖。
+- 功能边界：严格只做登记、列表、详情三个功能，不做编辑和删除。
+- 中文界面。
 
 ## Out of scope
 
-<What this intent explicitly does not cover.>
+- 编辑、删除记录（后续迭代再考虑）。
+- 用户登录、多用户、云同步、后端 API。
+- 标签/分类、心情标记、图片附件。
+- 数据导入导出。
 
 ## Open questions
 
-<Questions that must be answered before or during design.>
-
----
-
-> Format note: keep this file human-readable (the product owner reviews and accepts it) and
-> machine-actionable (the agent reads it and produces spec.md from it). Fields are structured
-> on purpose; keep each section short and concrete.
+- 无（技术形态、功能边界、列表能力、登记字段均已在访谈中确认）。
